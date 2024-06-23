@@ -1,0 +1,70 @@
+import { ActionRowBuilder, ButtonBuilder, ChannelType, Client, TextChannel, 
+         ThreadChannel, Message } from 'discord.js';
+
+export async function createThreadInChannel(client: Client, channelId: string, 
+        threadName: string, durationMinutes: number, privateThread: boolean = false) {
+    // Fetch the channel by ID
+    let channel = await client.channels.fetch(channelId);
+    
+    // Check if the channel is a text channel (or news channel) where threads can be created
+    if (channel && channel instanceof TextChannel) {
+        channel = channel as TextChannel;
+        // Create a new thread in the channel
+        const thread = await channel.threads.create({
+            name: threadName,
+            autoArchiveDuration: durationMinutes,
+            reason: 'Needed a separate thread for a topic',
+            type: privateThread ? ChannelType.PrivateThread : ChannelType.PublicThread,
+        });
+        return thread;
+    } else {
+        console.log('Channel does not support threads or channel not found.');
+    }
+}
+
+export async function sendToThread(thread: ThreadChannel, outputMessage: string, {
+    components = [],
+}: { 
+    components?: ActionRowBuilder<ButtonBuilder>[] 
+} = {}) {
+    // If the response is longer than 2000 characters, split it into chunks
+    // const continuationMessage = "\n...Continued in next message...";
+    const continuationMessage = ''
+    const chunks = _chunkMessage(outputMessage, continuationMessage);
+
+    await _sendChunks(thread, chunks, continuationMessage, components);
+}
+
+function _chunkMessage(message: string, continuationMessage: string) {
+    const chunks = [];
+    while (message.length > 2000) {
+        let splitIndex = message.substring(0, 2000 - continuationMessage.length).lastIndexOf('\n');
+        if (splitIndex === -1) { // No line break found
+        splitIndex = 2000 - continuationMessage.length;
+        }
+        chunks.push(message.substring(0, splitIndex));
+        message = message.substring(splitIndex);
+    }
+    chunks.push(message); // Append the last chunk
+    return chunks;
+}
+
+async function _sendChunks(thread: ThreadChannel, chunks: string[], 
+        continuationMessage: string, components?: ActionRowBuilder<ButtonBuilder>[]) {
+    for (let i = 0; i < chunks.length; i++) {
+        let messageOptions: { 
+            content: string, 
+            components?: ActionRowBuilder<ButtonBuilder>[]
+        } = { content: chunks[i] };
+
+        // Add components if this is the last chunk
+        if (i === chunks.length - 1 && components) {
+            messageOptions = { ...messageOptions, components };
+        }
+        
+        if (i !== chunks.length - 1) {
+            messageOptions.content += continuationMessage;
+        }
+        await thread.send(messageOptions);
+    }
+}

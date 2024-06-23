@@ -1,0 +1,25 @@
+{
+  "name": "chaincraft-discord",
+  "version": "1.0.0",
+  "description": "ChainCraft Discord Bot",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "start": "npm run build && node dist/index.js",
+    "build": "tsc",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "deploy-commands": "node dist/deploy-commands.js"
+  },
+  "author": "Eric Wood",
+  "license": "ISC",
+  "dependencies": {
+    "@gradio/client": "^1.1.1",
+    "discord.js": "^14.15.3",
+    "dotenv": "^16.4.5"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.7",
+    "eslint": "^9.5.0",
+    "typescript": "^5.5.2"
+  }
+}
