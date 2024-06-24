@@ -8,7 +8,6 @@ const {
     CHAINCRAFT_DISCORD_BOT_TOKEN: token,
     APP_ID: clientId
 } = process.env;
-console.log(token, clientId)
 
 const commandData = (ChaincraftCommand as ICommand).data
 const commands = [
@@ -31,7 +30,7 @@ const rest = new REST().setToken(token as string);
 			{ body: commands },
 		);
 
-		console.log(`Successfully reloaded ${commands.length} application (/) commands.`);
+		console.log(`Successfully reloaded ${commands.length} application (/) commands: ${commands.map(command => command.name).join(', ')}`);
 	} catch (error) {
 		// And of course, make sure you catch and log any errors!
 		console.error(error);
