@@ -1,23 +1,29 @@
 import { ActionRowBuilder, ButtonBuilder, ButtonInteraction, ButtonStyle, ChannelType, CommandInteraction, 
+         Interaction, 
          Message, TextChannel, ThreadAutoArchiveDuration, ThreadChannel } from "discord.js";
 
 import { chainCraftGameDescriptionOptionName } from "./commands/chaincraft-commands.js";
 import { init } from "./chaincraft-design-agent.js";
 import { getState, setState, removeState } from "./chaincraft_state_cache.js";
-import { createThreadInChannel, sendToThread } from "./util.js";
-import { create } from "domain";
+import { createThreadInChannel, sendToThread, createPost } from "./util.js";
 
 const designChannelId = process.env.CHAINCRAFT_DESIGN_CHANNEL_ID;
+const designShareChannelId = process.env.CHAINCRAFT_DESIGN_SHARE_CHANNEL_ID;
 
 let submitToAgent: Function | undefined;
 
 const approveButton = new ButtonBuilder()
-        .setCustomId('approve')
+        .setCustomId('chaincraft_approve_design')
         .setLabel('Approve')
         .setStyle(ButtonStyle.Primary)
 
+const shareButton = new ButtonBuilder()
+        .setCustomId('chaincraft_share_design')
+        .setLabel('Share')
+        .setStyle(ButtonStyle.Secondary)
+
 const buttonActionRow = new ActionRowBuilder<ButtonBuilder>()
-       .addComponents(approveButton); 
+       .addComponents(approveButton, shareButton); 
 
 export async function isMessageInChaincraftDesignActiveThread(message: Message) {
     // Check if the message is sent in a thread
@@ -34,7 +40,7 @@ export async function isMessageInChaincraftDesignActiveThread(message: Message) 
         // Retrieve the state for the thread
         const state = await getState(message.channel.id);
         // Check if the state exists and the thread has not been approved
-        return state !== null && !state.approved;
+        return state !== null && !state.approved && Object.keys(state).length > 0;
     } catch (error) {
         console.error(`Error checking thread state: ${error}`);
         return false;
@@ -73,7 +79,6 @@ export async function startChaincraftDesign(interaction: CommandInteraction) {
             interaction.client, 
             designChannelId as string,
             gameDescription!.substring(0, 100), 
-            ThreadAutoArchiveDuration.OneHour,
 	        true
         );
 
@@ -142,6 +147,83 @@ export async function approveChaincraftDesign(interaction: ButtonInteraction) {
         ephemeral: true
     })
     await interaction.channel?.send("The game design has been approved and the conversation has ended.")
+}
+
+export async function shareChaincraftDesign(interaction: ButtonInteraction) {
+    try {
+        if (!interaction.channel) {
+            await interaction.reply({
+                content: "This interaction can only occur in a thread.",
+            })
+            return;
+        }
+    
+        // Get the state for the thread
+        const state = await getState(interaction.channelId);
+        if (!state) {
+            await interaction.reply({
+                content: "There is no game design to share.",
+                ephemeral: true
+            });
+            return;
+        }
+        const { 
+            game_description: gameDescription, 
+            game_specification: gameSpecification 
+        } = state;
+     
+        // Has the game design already been shared?
+        const channel = interaction.channel as ThreadChannel;
+        let postId = await _getStoredPostId(channel);
+        let post = postId && await interaction.client.channels.fetch(postId);
+        if (!postId || !post) {
+            const post = await createPost(interaction.client, designShareChannelId as string, gameDescription, gameSpecification)
+            _storePostId(interaction, channel, post);
+        } else {
+            // Fetch the post channel by ID
+            sendToThread(post as ThreadChannel, gameSpecification);
+            await interaction.reply({
+                content: "The game design has been shared.",
+                ephemeral: true
+            });
+        }
+    } catch (error) {
+        console.error(`Error sharing game design: ${error}`);
+        if (!interaction.replied && !interaction.deferred) {
+            await interaction.reply({
+                content: "There was an error sharing the game design. Please try again later.",
+                ephemeral: true
+            }); 
+        }   
+    }
+}
+
+async function _getStoredPostId(thread: ThreadChannel) {
+    // Get the pinned message from the thread
+    const pinnedMessages = (await thread.messages.fetchPinned()).filter((m:Message) => m.author.bot);
+
+    // If there are no pinned messages, return
+    if (pinnedMessages.size === 0) {
+        return;
+    }
+
+    const postMessage = pinnedMessages.first();
+    const match = postMessage?.content.match(/https:\/\/discord\.com\/channels\/\d+\/(\d+)(?:\/(\d+))?/);
+    if (!match) {
+        console.error("Did not find a post link in the pinned message.", postMessage);
+    }
+    return match ? match[1] : undefined;
+}
+
+async function _storePostId(interaction: ButtonInteraction, designThread: ThreadChannel, post: ThreadChannel) {
+    // Add a pinned message to the thread with a link to the post
+    const message = `Shared in ${post.url}`;
+    await interaction.reply({
+        content: message,
+        ephemeral: false
+    });
+    const interactionMessage = await interaction.fetchReply();
+    await interactionMessage.pin();   
 }
 
 async function _updateThread(gameSpecification: string, aiQuestions: string, 

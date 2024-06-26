@@ -1,8 +1,8 @@
 import { ActionRowBuilder, ButtonBuilder, ChannelType, Client, TextChannel, 
-         ThreadChannel, Message } from 'discord.js';
+         ThreadChannel, ForumChannel, ThreadAutoArchiveDuration} from 'discord.js';
 
 export async function createThreadInChannel(client: Client, channelId: string, 
-        threadName: string, durationMinutes: number, privateThread: boolean = false) {
+        threadName: string, privateThread: boolean = false) {
     // Fetch the channel by ID
     let channel = await client.channels.fetch(channelId);
     
@@ -12,7 +12,7 @@ export async function createThreadInChannel(client: Client, channelId: string,
         // Create a new thread in the channel
         const thread = await channel.threads.create({
             name: threadName,
-            autoArchiveDuration: durationMinutes,
+            autoArchiveDuration: ThreadAutoArchiveDuration.OneHour,
             reason: 'Needed a separate thread for a topic',
             type: privateThread ? ChannelType.PrivateThread : ChannelType.PublicThread,
         });
@@ -35,7 +35,34 @@ export async function sendToThread(thread: ThreadChannel, outputMessage: string,
     await _sendChunks(thread, chunks, continuationMessage, components);
 }
 
-function _chunkMessage(message: string, continuationMessage: string) {
+export async function createPost(client: Client, channelId: string, postTitle: string, message: string) {
+    // Fetch the channel by ID
+    let channel = await client.channels.fetch(channelId);
+    
+    // Check if the channel is a text channel (or news channel) where threads can be created
+    if (channel && channel instanceof ForumChannel) {
+        channel = channel as ForumChannel;
+
+        // Chunk the message if it's too long
+        const chunks = _chunkMessage(message);
+
+        // Create a new thread in the channel
+        const thread = await channel.threads.create({
+            name: postTitle,
+            autoArchiveDuration: ThreadAutoArchiveDuration.OneHour,
+            message: {
+                content: chunks[0],
+            },
+        });
+
+        _sendChunks(thread, chunks.slice(1));
+        return thread;
+    } else {
+        throw new Error('Channel does not support threads or channel not found.');
+    }
+}
+
+function _chunkMessage(message: string, continuationMessage: string = "") {
     const chunks = [];
     while (message.length > 2000) {
         let splitIndex = message.substring(0, 2000 - continuationMessage.length).lastIndexOf('\n');
@@ -50,7 +77,7 @@ function _chunkMessage(message: string, continuationMessage: string) {
 }
 
 async function _sendChunks(thread: ThreadChannel, chunks: string[], 
-        continuationMessage: string, components?: ActionRowBuilder<ButtonBuilder>[]) {
+        continuationMessage: string = "", components?: ActionRowBuilder<ButtonBuilder>[]) {
     for (let i = 0; i < chunks.length; i++) {
         let messageOptions: { 
             content: string, 
