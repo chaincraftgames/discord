@@ -175,7 +175,12 @@ export async function shareChaincraftDesign(interaction: ButtonInteraction) {
         // Has the game design already been shared?
         const channel = interaction.channel as ThreadChannel;
         let postId = await _getStoredPostId(channel);
-        let post = postId && await interaction.client.channels.fetch(postId);
+        let post;
+        try {
+            post = postId && await interaction.client.channels.fetch(postId);
+        } catch (error) {
+            // Do nothing if the post is not found
+        }
         if (!postId || !post) {
             const post = await createPost(interaction.client, designShareChannelId as string, gameDescription, gameSpecification)
             _storePostId(interaction, channel, post);
@@ -188,7 +193,7 @@ export async function shareChaincraftDesign(interaction: ButtonInteraction) {
             });
         }
     } catch (error) {
-        console.error(`Error sharing game design: ${error}`);
+        console.error("Error sharing game design:", error);
         if (!interaction.replied && !interaction.deferred) {
             await interaction.reply({
                 content: "There was an error sharing the game design. Please try again later.",
@@ -216,14 +221,32 @@ async function _getStoredPostId(thread: ThreadChannel) {
 }
 
 async function _storePostId(interaction: ButtonInteraction, designThread: ThreadChannel, post: ThreadChannel) {
+    // Defer the response to avoid leaving the interaction hanging
+    if (!interaction.deferred) {
+        await interaction.deferReply();
+    }
     // Add a pinned message to the thread with a link to the post
-    const message = `Shared in ${post.url}`;
-    await interaction.reply({
-        content: message,
-        ephemeral: false
-    });
-    const interactionMessage = await interaction.fetchReply();
-    await interactionMessage.pin();   
+    const messageContent = `Shared in ${post.url}`;
+    const pinnedMessages = await designThread.messages.fetchPinned();
+    const existingPostMessage = pinnedMessages.find(m => m.content.includes("Shared in") && m.author.bot);
+
+    if (existingPostMessage) {
+        // If an existing pinned message is found, edit it
+        await existingPostMessage.edit(messageContent);
+        // No need to pin again if it's already pinned
+    } else {
+        // If no existing message is found, create a new one and pin it
+        const sentMessage = await designThread.send(messageContent);
+        await sentMessage.pin();
+    }
+
+    // Ensure the interaction is replied to, to avoid leaving the interaction hanging
+    if (!interaction.replied) {
+        await interaction.followUp({
+            content: "The updated game design has been shared.",
+            ephemeral: true
+        });
+    }  
 }
 
 async function _updateThread(gameSpecification: string, aiQuestions: string, 
