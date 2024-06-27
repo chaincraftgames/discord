@@ -68,6 +68,7 @@ export async function startChaincraftDesign(interaction: CommandInteraction) {
         const gameDescription = (interaction.options as any).getString(chainCraftGameDescriptionOptionName)
 
         const {
+            gameTitle,
             gameSpecification,
             aiQuestions,
             updatedState
@@ -91,7 +92,7 @@ export async function startChaincraftDesign(interaction: CommandInteraction) {
 
         setState(thread.id, updatedState);
 
-        await _updateThread(gameSpecification, aiQuestions, thread)
+        await _updateThread(gameTitle, gameSpecification, aiQuestions, thread)
 
         // Send confirmation message with thread link
         interaction.editReply(`${threadMessage}. Private thread created. [Click here to jump to the thread.](<${thread.url}>)")`); 
@@ -124,6 +125,7 @@ export async function continueChaincraftDesign(message: Message) {
         const processingMessage = await message.reply("Processing your request...");
 
         const {
+            gameTitle,
             gameSpecification,
             aiQuestions,
             updatedState
@@ -133,7 +135,7 @@ export async function continueChaincraftDesign(message: Message) {
 
         // Delete the processing message
         await processingMessage.delete();
-        _updateThread(gameSpecification, aiQuestions, message.channel as ThreadChannel<boolean>);
+        _updateThread(gameTitle, gameSpecification, aiQuestions, message.channel as ThreadChannel<boolean>);
     } catch (e) {
         console.log(`Error continuing chaincraft conversation: ${e}`);
         await message.reply("Sorry, there was an error continuing the Chaincraft design. Please try again later.");
@@ -168,9 +170,11 @@ export async function shareChaincraftDesign(interaction: ButtonInteraction) {
             return;
         }
         const { 
-            game_description: gameDescription, 
+            game_title: gameTitle,
             game_specification: gameSpecification 
         } = state;
+
+        const postMessage = `**Game Title:** ${gameTitle}\n\n**Game Design Specification:** \n${gameSpecification}`
      
         // Has the game design already been shared?
         const channel = interaction.channel as ThreadChannel;
@@ -182,7 +186,7 @@ export async function shareChaincraftDesign(interaction: ButtonInteraction) {
             // Do nothing if the post is not found
         }
         if (!postId || !post) {
-            const post = await createPost(interaction.client, designShareChannelId as string, gameDescription, gameSpecification)
+            const post = await createPost(interaction.client, designShareChannelId as string, gameTitle, postMessage)
             _storePostId(interaction, channel, post);
         } else {
             // Fetch the post channel by ID
@@ -249,9 +253,9 @@ async function _storePostId(interaction: ButtonInteraction, designThread: Thread
     }  
 }
 
-async function _updateThread(gameSpecification: string, aiQuestions: string, 
+async function _updateThread(gameTitle: string,  gameSpecification: string, aiQuestions: string, 
                             thread: ThreadChannel<boolean>) {
-    let outputMessage = `\nGame Design Specification: \n${gameSpecification}\n\nAI Questions:\n${aiQuestions}`;
+    let outputMessage = `**Game Title:** ${gameTitle}\n\n**Game Design Specification:** \n${gameSpecification}\n\n**AI Questions:**\n${aiQuestions}`;
 
     try {
         const response = await sendToThread(thread, outputMessage, {

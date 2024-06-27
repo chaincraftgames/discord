@@ -5,6 +5,7 @@ const { CHAINCRAFT_HF_ACCESS_TOKEN: hfToken,
  } = process.env; 
 
 export interface IChaincraftResponse {
+    gameTitle: string,
     gameSpecification: string, 
     aiQuestions: string, 
     updatedState: any,
@@ -16,7 +17,9 @@ export async function init() {
     const app = await Client.connect(spaceId, { 
         hf_token: hfToken,
 	    space_status: (space_status: SpaceStatus) => 
-                console.log("Chaincraft Design Agent status updated: ", space_status) 
+                console.log("Chaincraft Design Agent status updated: ", space_status), 
+        // This is an undocumented option that is apparently required if we have more outputs than inputs
+        with_null_state: true,
     })
     if (app) {
         console.log("Connected to Chaincraft Design Agent")
@@ -55,9 +58,10 @@ export async function init() {
         // Race the job processing and timeout
         results = await Promise.race([processJob(), timeoutPromise]);
     
-        const [gameSpecification, aiQuestions, updatedState] = results;
+        const [gameTitle, gameSpecification, aiQuestions, updatedState] = results;
     
         return {
+            gameTitle,
             gameSpecification,
             aiQuestions,
             updatedState,
