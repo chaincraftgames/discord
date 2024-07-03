@@ -1,6 +1,4 @@
 import { Client as BaseClient, SpaceStatus } from "@gradio/client";
-import { time } from "console";
-import { Base } from "discord.js";
 
 const MAX_RETRIES = 1;
 const RETRY_DELAY = 5000;
