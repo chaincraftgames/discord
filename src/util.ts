@@ -1,5 +1,6 @@
 import { ActionRowBuilder, ButtonBuilder, ChannelType, Client, TextChannel, 
-         ThreadChannel, ForumChannel, ThreadAutoArchiveDuration} from 'discord.js';
+         ThreadChannel, ForumChannel, ThreadAutoArchiveDuration,
+         APIEmbed} from 'discord.js';
 
 export async function createThreadInChannel(client: Client, channelId: string, 
         threadName: string, privateThread: boolean = false) {
@@ -35,7 +36,13 @@ export async function sendToThread(thread: ThreadChannel, outputMessage: string,
     await _sendChunks(thread, chunks, continuationMessage, components);
 }
 
-export async function createPost(client: Client, channelId: string, postTitle: string, message: string) {
+export async function createPost(
+    client: Client, 
+    channelId: string, 
+    postTitle: string, 
+    message: string, 
+    embed: APIEmbed | undefined = undefined
+) {
     // Fetch the channel by ID
     let channel = await client.channels.fetch(channelId);
     
@@ -51,11 +58,13 @@ export async function createPost(client: Client, channelId: string, postTitle: s
             name: postTitle,
             autoArchiveDuration: ThreadAutoArchiveDuration.OneHour,
             message: {
-                content: chunks[0],
+                content: embed ? '' : chunks[0], // If there's an embed, start with an empty string
+                embeds: embed ? [embed] : [],
             },
         });
 
-        _sendChunks(thread, chunks.slice(1));
+        // Send the remaining chunks if there's an embed, otherwise start from the second chunk
+        _sendChunks(thread, embed ? chunks : chunks.slice(1));
         return thread;
     } else {
         throw new Error('Channel does not support threads or channel not found.');

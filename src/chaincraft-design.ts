@@ -1,6 +1,5 @@
-import { ActionRowBuilder, ButtonBuilder, ButtonInteraction, ButtonStyle, ChannelType, CommandInteraction, 
-         Interaction, 
-         Message, TextChannel, ThreadAutoArchiveDuration, ThreadChannel } from "discord.js";
+import { ActionRowBuilder, APIEmbed, ButtonBuilder, ButtonInteraction, ButtonStyle, CommandInteraction,  
+         Message, TextChannel, ThreadChannel } from "discord.js";
 
 import { chainCraftGameDescriptionOptionName } from "./commands/chaincraft-commands.js";
 import { init } from "./chaincraft-design-agent.js";
@@ -10,7 +9,10 @@ import { createThreadInChannel, sendToThread, createPost } from "./util.js";
 const designChannelId = process.env.CHAINCRAFT_DESIGN_CHANNEL_ID;
 const designShareChannelId = process.env.CHAINCRAFT_DESIGN_SHARE_CHANNEL_ID;
 
-let submitToAgent: Function | undefined;
+let agentApi: { 
+    submit: Function
+    generateImage: Function 
+} | undefined;
 
 const approveButton = new ButtonBuilder()
         .setCustomId('chaincraft_approve_design')
@@ -73,8 +75,12 @@ export async function startChaincraftDesign(interaction: CommandInteraction) {
             aiQuestions,
             updatedState
         } = await _invokeChaincraftAgent(gameDescription);
+
+        console.log(`Game Title: ${gameTitle}, Game Specification: ${gameSpecification}, AI Questions: ${aiQuestions}`);
+        // Kickoff the image generation as well
+        const image_url_promise = _invokeGenerateImage(gameSpecification)
     
-        const threadMessage = `**${gameDescription}** - ${interaction.user.toString()}`
+        const threadMessageText = `**${gameDescription}** - ${interaction.user.toString()}`;
         
         thread = await createThreadInChannel(
             interaction.client, 
@@ -88,9 +94,14 @@ export async function startChaincraftDesign(interaction: CommandInteraction) {
         }
         thread = thread as ThreadChannel<boolean>;
         await thread.join();
-        thread.send(threadMessage);
-
+        const threadMessage = await thread.send(threadMessageText);
         setState(thread.id, updatedState);
+        image_url_promise.then((imageUrl: string) => {
+            _updateMessageWithImage(threadMessage, imageUrl);
+
+            // Update the state with the image URL
+            setState(thread!.id, JSON.stringify({ ...JSON.parse(updatedState), imageUrl }));
+        });
 
         await _updateThread(gameTitle, gameSpecification, aiQuestions, thread)
 
@@ -171,10 +182,12 @@ export async function shareChaincraftDesign(interaction: ButtonInteraction) {
         }
         const { 
             game_title: gameTitle,
-            game_specification: gameSpecification 
+            game_specification: gameSpecification,
+            imageUrl 
         } = state;
 
         const postMessage = `**Game Title:** ${gameTitle}\n\n**Game Design Specification:** \n${gameSpecification}`
+        let imageEmbed: APIEmbed | undefined = imageUrl ? { image: { url: imageUrl } } : undefined;
      
         // Has the game design already been shared?
         const channel = interaction.channel as ThreadChannel;
@@ -186,7 +199,13 @@ export async function shareChaincraftDesign(interaction: ButtonInteraction) {
             // Do nothing if the post is not found
         }
         if (!postId || !post) {
-            const post = await createPost(interaction.client, designShareChannelId as string, gameTitle, postMessage)
+            const post = await createPost(
+                interaction.client, 
+                designShareChannelId as string, 
+                gameTitle, 
+                postMessage,
+                imageEmbed
+            )
             _storePostId(interaction, channel, post);
         } else {
             // Fetch the post channel by ID
@@ -267,14 +286,42 @@ async function _updateThread(gameTitle: string,  gameSpecification: string, aiQu
     }
 }
 
+// Adds the image to the first message in the thread
+async function _updateMessageWithImage(message: Message, image_url: string) {
+    try {
+        // Create the embed with the image
+        const embed = {
+            image: {
+                url: image_url
+            }
+        };
+
+        // Edit the message with the image
+        await message.edit({ content: message.content, embeds: [embed]});
+    } catch (e) {
+        console.error(`Error sending image: ${e}`);
+    }
+}
+
 async function _invokeChaincraftAgent(userInput: string, current_state: any = {},  approved: boolean = false) {
     try {
-        if (!submitToAgent) {
-            const agent = await init();
-            submitToAgent = agent.submit as Function;
+        if (!agentApi) {
+            agentApi = await init();
         }
-        return await submitToAgent(userInput, approved, current_state);
+        return await agentApi.submit(userInput, approved, current_state);
     } catch (error) {
         throw new Error(`Error initializing chaincraft design agent: ${error}`);  
     }
 }
+
+async function _invokeGenerateImage(input_design: string) {
+    try {
+        if (!agentApi) {
+            agentApi = await init();
+        }
+        return await agentApi.generateImage(input_design);
+    } catch (error) {
+        throw new Error(`Error initializing chaincraft design agent: ${error}`);  
+    }
+}
+

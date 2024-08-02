@@ -16,15 +16,12 @@ export interface IChaincraftResponse {
 export async function init() {
     // Connect to the Hugging Face server
     let app = await connectWithRetry();
-    
-    async function submit(
-        userInput: string,
-        approved=false,
-        current_state={},
-        timeout_count=0
-    ) {
+
+    async function processJobWithTimeout(job: any, timeout: number = 10000) {
         let jobCompleted = false; // Flag to track job completion
         let timeoutId: NodeJS.Timeout | undefined; 
+        let timeout_count = 0;
+        let results: any;
 
         const processJob = async (job: any) => {
             for await (const event of job) {
@@ -37,11 +34,8 @@ export async function init() {
             throw new Error("No data received from the design agent."); // In case the loop exits without data
         };
 
-        let results;
-
         while (!jobCompleted && timeout_count <= MAX_RETRIES) {
             const timeoutPromise = new Promise<void>((resolve, reject) => {
-                const timeout = 10000; // 10 seconds timeout
                 timeoutId = setTimeout(async () => {
                     if (jobCompleted) {
                         return; // If job has completed, do nothing
@@ -63,14 +57,7 @@ export async function init() {
                     }
                 }, timeout);
             });
-            
-            // Submit a prompt to the Hugging Face server
-            const job = app.submit("/submit_design_ui_input", {
-                user_message: userInput,
-                approved,
-                current_state: JSON.stringify(current_state),
-            });
-        
+
             // Race the job processing and timeout
             results = await Promise.race([processJob(job), timeoutPromise]);
         } 
@@ -78,8 +65,33 @@ export async function init() {
         if (!jobCompleted) {
             throw new Error("Timeout waiting for response from the design agent.");
         }
+
+        return results;
+    }
     
+    async function submit(
+        userInput: string,
+        approved=false,
+        current_state={}
+    ) { 
+        // Submit a prompt to the Hugging Face server
+        const job = app.submit("/submit_design_ui_input", {
+            user_message: userInput,
+            approved,
+            current_state: JSON.stringify(current_state),
+
+            // // Due to a bug in gradio client, we need to pass values for parameters for all the endpoints
+            // game_design_specification: "fake_input_game_design",
+            // x: "fake_input_x"
+        });
+        const results = await processJobWithTimeout(job);
+        
         const [gameTitle, gameSpecification, aiQuestions, updatedState] = results;
+
+        // If the game specification is empty, throw an error
+        if (!gameSpecification) {
+            throw new Error("No game specification returned from the design agent.");
+        }
     
         return {
             gameTitle,
@@ -89,8 +101,30 @@ export async function init() {
         };
     }
 
+    async function generateImage(
+        game_design_specification: string
+    ) {
+        console.log("Generating image for game design specification: ", game_design_specification);
+        // Submit a prompt to the Hugging Face server
+        const job = app.submit("/generate_image", {
+            game_design_specification,
+
+            // // Due to a bug in gradio client, we need to pass values for parameters for all the endpoints
+            // user_message: "",
+            // approved: "",
+            // current_state: "",
+            // x: ""
+        });
+        const results = await processJobWithTimeout(job, 30000);
+        const [_, image_url] = results;
+        
+        return image_url;
+        // return ""
+    }
+
     return {
-        submit
+        submit,
+        generateImage
     }
 }
 
