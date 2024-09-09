@@ -17,7 +17,7 @@ export async function init() {
     // Connect to the Hugging Face server
     let app = await connectWithRetry();
 
-    async function processJobWithTimeout(job: any, timeout: number = 10000) {
+    async function processJobWithTimeout(job: any, timeout: number = 20000) {
         let jobCompleted = false; // Flag to track job completion
         let timeoutId: NodeJS.Timeout | undefined; 
         let timeout_count = 0;
