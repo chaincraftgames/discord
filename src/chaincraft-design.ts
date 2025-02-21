@@ -4,10 +4,12 @@ import { ActionRowBuilder, APIEmbed, ButtonBuilder, ButtonInteraction, ButtonSty
 import { chainCraftGameDescriptionOptionName } from "./commands/chaincraft-commands.js";
 import { init } from "./chaincraft-design-agent.js";
 import { getState, setState, removeState } from "./chaincraft_state_cache.js";
-import { createThreadInChannel, sendToThread, createPost } from "./util.js";
+import { createThreadInChannel, sendToThread, createPost, pinataSDK } from "./util.js";
+
 
 const designChannelId = process.env.CHAINCRAFT_DESIGN_CHANNEL_ID;
 const designShareChannelId = process.env.CHAINCRAFT_DESIGN_SHARE_CHANNEL_ID;
+const pinataUrl = process.env.CHAINCRAFT_PINATA_GATEWAY_URL;
 
 let agentApi: { 
     submit: Function
@@ -24,8 +26,13 @@ const shareButton = new ButtonBuilder()
         .setLabel('Share')
         .setStyle(ButtonStyle.Secondary)
 
+const generateTokenButton = new ButtonBuilder()
+        .setCustomId('chaincraft_upload_design')
+        .setLabel('Generate Token')
+        .setStyle(ButtonStyle.Secondary)
+
 const buttonActionRow = new ActionRowBuilder<ButtonBuilder>()
-       .addComponents(approveButton, shareButton); 
+       .addComponents(approveButton, shareButton, generateTokenButton); 
 
 export async function isMessageInChaincraftDesignActiveThread(message: Message) {
     // Check if the message is sent in a thread
@@ -223,6 +230,45 @@ export async function shareChaincraftDesign(interaction: ButtonInteraction) {
                 ephemeral: true
             }); 
         }   
+    }
+}
+
+export async function uploadChaincraftDesign(interaction: ButtonInteraction) {
+    try {
+        const channel = interaction.client.channels.cache.get(interaction.channelId);
+        
+        if (!channel?.isTextBased()) {
+            return interaction.reply({ content: 'This command only works in text channels', ephemeral: true });
+        }
+        
+        const messages = await channel.messages.fetch({ limit: 1 });
+        const message = messages.find(m => !m.author.bot); // should not be a bot message
+
+        let jsonData;
+        try {
+            jsonData = JSON.parse(message!.content);
+        } catch (parseError) {
+            console.error('JSON parsing error:', parseError);
+            return interaction.reply({ content: 'Invalid JSON format in message', ephemeral: true });
+        }
+
+        // Initialize Pinata client (adjust based on your SDK setup)
+        const pinata = await pinataSDK();
+
+        const upload = await pinata.upload.json(jsonData).addMetadata({ name: interaction.user.id });
+        //console.log(upload);
+        
+        await interaction.reply({ 
+            content: `JSON uploaded to Pinata! You can view it at: ${pinataUrl}/${upload.IpfsHash}`, 
+            ephemeral: true 
+        });
+        
+    } catch (error) {
+        console.error('Error uploading to Pinata:', error);
+        await interaction.reply({ 
+            content: 'Failed to upload data to Pinata', 
+            ephemeral: true 
+        }).catch(console.error);
     }
 }
 

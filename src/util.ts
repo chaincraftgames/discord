@@ -1,6 +1,10 @@
 import { ActionRowBuilder, ButtonBuilder, ChannelType, Client, TextChannel, 
          ThreadChannel, ForumChannel, ThreadAutoArchiveDuration,
          APIEmbed} from 'discord.js';
+import { PinataSDK } from 'pinata-web3'
+
+const pinataJwt = process.env.CHAINCRAFT_PINATA_JWT;
+const pinataUrl = process.env.CHAINCRAFT_PINATA_GATEWAY_URL;
 
 export async function createThreadInChannel(client: Client, channelId: string, 
         threadName: string, privateThread: boolean = false) {
@@ -103,4 +107,19 @@ async function _sendChunks(thread: ThreadChannel, chunks: string[],
         }
         await thread.send(messageOptions);
     }
+}
+
+
+export async function pinataSDK(){
+
+    if (!pinataJwt) {
+        throw new Error('Pinata JWT key is not set in environment variables.');
+      }
+
+    const pinata = new PinataSDK({
+        pinataJwt: `${pinataJwt}`,
+        pinataGateway: `${pinataUrl}`
+    })
+
+    return pinata;
 }
