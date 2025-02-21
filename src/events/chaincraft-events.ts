@@ -1,6 +1,6 @@
 import { Events, Interaction, Message, ThreadChannel } from "discord.js";
 import { isMessageInChaincraftDesignActiveThread, continueChaincraftDesign,
-         approveChaincraftDesign, shareChaincraftDesign
+         approveChaincraftDesign, shareChaincraftDesign, uploadChaincraftDesign
  } from '../chaincraft-design.js'
 import { removeState } from "../chaincraft_state_cache.js";
  
@@ -58,9 +58,23 @@ const ChaincraftOnShare = {
     }
 }
 
+const ChaincraftOnUpload = {
+    name: Events.InteractionCreate,
+    execute: async (interaction: Interaction) => {
+        try {
+            if (interaction.isButton() && interaction.customId === 'chaincraft_upload_design') {
+                await uploadChaincraftDesign(interaction);
+            }
+        } catch (error) {
+            console.error("Unhandled error in ChaincraftOnUpload: ", error);
+        }
+    }
+}
+
 export { 
     ChaincraftOnMessage, 
     ChaincraftOnApprove,
     ChaincraftOnShare,
-    ChaincraftOnThreadDelete
- }
+    ChaincraftOnThreadDelete,
+    ChaincraftOnUpload
+}
