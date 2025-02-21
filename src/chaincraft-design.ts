@@ -27,7 +27,7 @@ const shareButton = new ButtonBuilder()
         .setStyle(ButtonStyle.Secondary)
 
 const generateTokenButton = new ButtonBuilder()
-        .setCustomId('chaincraft_generate_design')
+        .setCustomId('chaincraft_upload_design')
         .setLabel('Generate Token')
         .setStyle(ButtonStyle.Secondary)
 
