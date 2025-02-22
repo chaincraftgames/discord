@@ -1,6 +1,6 @@
 import { Client as BaseClient, SpaceStatus } from "@gradio/client";
 
-const MAX_RETRIES = 1;
+const MAX_RETRIES = 2;
 const RETRY_DELAY = 5000;
 const { CHAINCRAFT_HF_ACCESS_TOKEN: hfToken,
         CHAINCRAFT_HF_SPACE: spaceId,

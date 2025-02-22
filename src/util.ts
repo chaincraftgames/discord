@@ -4,7 +4,7 @@ import { ActionRowBuilder, ButtonBuilder, ChannelType, Client, TextChannel,
 import { PinataSDK } from 'pinata-web3'
 
 const pinataJwt = process.env.CHAINCRAFT_PINATA_JWT;
-const pinataUrl = process.env.CHAINCRAFT_PINATA_GATEWAY_URL;
+const pinataGateway = process.env.CHAINCRAFT_PINATA_GATEWAY;
 
 export async function createThreadInChannel(client: Client, channelId: string, 
         threadName: string, privateThread: boolean = false) {
@@ -118,7 +118,7 @@ export async function pinataSDK(){
 
     const pinata = new PinataSDK({
         pinataJwt: `${pinataJwt}`,
-        pinataGateway: `${pinataUrl}`
+        pinataGateway: `${pinataGateway}`
     })
 
     return pinata;
